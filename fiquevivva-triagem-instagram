@@ -1,0 +1,630 @@
+{
+  "name": "Fique Vivva - Triagem de Mensagens Instagram",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## COMO USAR ESTE WORKFLOW\n\n1. Este workflow está pronto com toda a lógica de triagem, mas usa um node de TESTE no lugar do Webhook real da Meta (que ainda não está conectado).\n2. Edite o node \"SIMULAR Mensagem Recebida\" para trocar o texto/payload e testar os 3 cenários: primeira mensagem, escolha de cada opção do menu.\n3. Quando a API da Meta estiver funcionando:\n   - Substitua o node \"TRIGGER DE TESTE\" + \"SIMULAR Mensagem Recebida\" por um node Webhook real\n   - O resto do fluxo (Function, Sheets, IF, Switch, HTTP Requests) continua igual\n4. Antes de usar de verdade, configure:\n   - Credencial do Google Sheets (nos nodes verdes)\n   - access_token da Meta (nos nodes HTTP Request)\n   - ID da planilha (nos nodes do Google Sheets)",
+        "height": 476,
+        "width": 460
+      },
+      "id": "22d165e4-f83b-485b-ab83-2414256bc2b1",
+      "name": "Instruções",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        528,
+        -304
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d556bdf2-3430-430f-af9d-a68728982a4e",
+      "name": "TRIGGER DE TESTE (trocar por Webhook depois)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        528,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"body\": {\n    \"entry\": [\n      {\n        \"messaging\": [\n          {\n            \"sender\": { \"id\": \"TESTE_USUARIO_001\" },\n            \"message\": {\n              \"text\": \"Oi, preciso de ajuda\",\n              \"quick_reply\": null\n            }\n          }\n        ]\n      }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "id": "6d9b089f-168a-4070-b840-6c9ee861667f",
+      "name": "SIMULAR Mensagem Recebida",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const entry = $json.body.entry[0].messaging[0];\n\nreturn {\n  json: {\n    sender_id: entry.sender.id,\n    text: entry.message?.text || null,\n    quick_reply_payload: entry.message?.quick_reply?.payload || null\n  }\n};"
+      },
+      "id": "6a4fa15b-10fe-4ba4-87df-643af50a40ff",
+      "name": "Extrair Dados da Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_SPREADSHEET_ID_AQUI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "conversas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/SEU_SPREADSHEET_ID_AQUI/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "sender_id",
+              "lookupValue": "={{ $json.sender_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5c315a36-5f13-483e-a2a8-51031023e319",
+      "name": "Buscar Contato na Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1248,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "R4NRXYq5Z1GdZUmH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.sender_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7c371570-3fcc-41ef-87c3-91bd605746f3",
+      "name": "É Primeira Mensagem?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1488,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "COLOQUE_AQUI_O_TOKEN_DE_ACESSO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $('Extrair Dados da Mensagem').item.json.sender_id }}\"},\n  \"message\": {\n    \"text\": \"Oi! Muito obrigada por entrar em contato com o Fique Vivva 💛 Em que posso te ajudar hoje?\",\n    \"quick_replies\": [\n      {\"content_type\": \"text\", \"title\": \"Suporte a vítima de violência\", \"payload\": \"SUPORTE_VIOLENCIA\"},\n      {\"content_type\": \"text\", \"title\": \"Quero ser voluntária\", \"payload\": \"VOLUNTARIA\"},\n      {\"content_type\": \"text\", \"title\": \"Dúvidas\", \"payload\": \"DUVIDAS\"}\n    ]\n  }\n}",
+        "options": {}
+      },
+      "id": "c4843bc4-ba36-439e-b3a7-dccd62c4f5fb",
+      "name": "Enviar Boas-vindas + Menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1728,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_SPREADSHEET_ID_AQUI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversas",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "39922a61-6c69-44b8-bc5c-b570b86d96a0",
+      "name": "Criar Registro na Planilha",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "R4NRXYq5Z1GdZUmH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.quick_reply_payload }}",
+                    "rightValue": "SUPORTE_VIOLENCIA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Suporte a violencia"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.quick_reply_payload }}",
+                    "rightValue": "VOLUNTARIA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Voluntaria"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.quick_reply_payload }}",
+                    "rightValue": "DUVIDAS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Duvidas"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f863139f-b1e8-4869-8c7b-300c951b6379",
+      "name": "Rotear por Escolha",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1728,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "COLOQUE_AQUI_O_TOKEN_DE_ACESSO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $('Extrair Dados da Mensagem').item.json.sender_id }}\"},\n  \"message\": {\n    \"text\": \"Você não está sozinha. Já estou te conectando com alguém da nossa equipe, só um instante 💛 Se for uma emergência agora, ligue 180 (Central de Atendimento à Mulher) ou 190.\"\n  }\n}",
+        "options": {}
+      },
+      "id": "8b996571-a368-48f3-978b-f08773256c0e",
+      "name": "Responder - Suporte Violencia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "COLOQUE_AQUI_O_TOKEN_DE_ACESSO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $('Extrair Dados da Mensagem').item.json.sender_id }}\"},\n  \"message\": {\n    \"text\": \"Que alegria em seu interesse de se voluntariar! Preencha nosso formulário de cadastro aqui: https://forms.gle/SEU_FORMULARIO_AQUI\"\n  }\n}",
+        "options": {}
+      },
+      "id": "148d7b58-0744-4fb0-8fd7-050d8ee5a962",
+      "name": "Responder - Voluntaria",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/me/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "COLOQUE_AQUI_O_TOKEN_DE_ACESSO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"recipient\": {\"id\": \"{{ $('Extrair Dados da Mensagem').item.json.sender_id }}\"},\n  \"message\": {\n    \"text\": \"Claro! Conta pra gente sua dúvida que a equipe te responde em breve.\"\n  }\n}",
+        "options": {}
+      },
+      "id": "3fb68239-ffab-4a15-8832-4c2e3a053959",
+      "name": "Responder - Duvidas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_SPREADSHEET_ID_AQUI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversas",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "sender_id"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "628d3ecc-c09f-461e-9a8d-0a09d553fe69",
+      "name": "Atualizar Planilha - Violencia",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2224,
+        240
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "R4NRXYq5Z1GdZUmH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_SPREADSHEET_ID_AQUI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversas",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "sender_id"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d466c9c2-ae8b-44d0-addb-a95e2f048c7b",
+      "name": "Atualizar Planilha - Voluntaria",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2224,
+        432
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "R4NRXYq5Z1GdZUmH",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_SPREADSHEET_ID_AQUI",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversas",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "sender_id"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5eb9d072-390f-447c-af0e-57f956227612",
+      "name": "Atualizar Planilha - Duvidas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2224,
+        624
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "R4NRXYq5Z1GdZUmH",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "TRIGGER DE TESTE (trocar por Webhook depois)": {
+      "main": [
+        [
+          {
+            "node": "SIMULAR Mensagem Recebida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SIMULAR Mensagem Recebida": {
+      "main": [
+        [
+          {
+            "node": "Extrair Dados da Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados da Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Buscar Contato na Planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Contato na Planilha": {
+      "main": [
+        [
+          {
+            "node": "É Primeira Mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Primeira Mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Enviar Boas-vindas + Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rotear por Escolha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Boas-vindas + Menu": {
+      "main": [
+        [
+          {
+            "node": "Criar Registro na Planilha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotear por Escolha": {
+      "main": [
+        [
+          {
+            "node": "Responder - Suporte Violencia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder - Voluntaria",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder - Duvidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder - Suporte Violencia": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Planilha - Violencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder - Voluntaria": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Planilha - Voluntaria",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder - Duvidas": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Planilha - Duvidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a643721b-3255-49ac-abeb-d3332904f948",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "83929a3bb25b6b1d5f6686c000ee3820eb205767a946cdde938b29931a91eb7d"
+  },
+  "nodeGroups": [],
+  "id": "cDRVmpHZfjBZWqRE",
+  "tags": []
+}
